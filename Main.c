@@ -24,8 +24,8 @@ code Main
 
       -- SimpleThreadExample ()
       -- MoreThreadExamples ()
-       TestMutex ()
-      -- ProducerConsumer ()
+      -- TestMutex ()
+       ProducerConsumer ()
       -- DiningPhilosophers ()
 
       ThreadFinish ()
@@ -310,9 +310,17 @@ code Main
     bufferNextIn: int = 0
     bufferNextOut: int = 0
     thArray: array [8] of Thread = new array of Thread { 8 of new Thread }
-
+--    proLock: Mutex = new Mutex
+  --  conLock: Mutex = new Mutex
+    lock: Mutex = new Mutex
+    semFull: Semaphore = new Semaphore
+    semEmpty: Semaphore = new Semaphore
   function ProducerConsumer ()
-
+      semFull.Init(0)
+      semEmpty.Init(BUFFER_SIZE)
+    --  proLock.Init()
+     -- conLock.Init()
+      lock.Init()
       print ("     ")
 
       thArray[0].Init ("Consumer-1                               |      ")
@@ -348,7 +356,9 @@ code Main
         c: char = intToChar ('A' + myId - 1)
       for i = 1 to 5
         -- Perform synchroniztion...
-
+	
+        semEmpty.Down()
+	lock.Lock()
         -- Add c to the buffer
         buffer [bufferNextIn] = c
         bufferNextIn = (bufferNextIn + 1) % BUFFER_SIZE
@@ -356,7 +366,8 @@ code Main
 
         -- Print a line showing the state
         PrintBuffer (c)
-
+	lock.Unlock()
+        semFull.Up()
         -- Perform synchronization...
 
       endFor
@@ -367,15 +378,18 @@ code Main
         c: char
       while true
         -- Perform synchroniztion...
-
+       
+	semFull.Down()
+	lock.Lock()
         -- Remove next character from the buffer
         c = buffer [bufferNextOut]
         bufferNextOut = (bufferNextOut + 1) % BUFFER_SIZE
         bufferSize = bufferSize - 1
-
+	
         -- Print a line showing the state
         PrintBuffer (c)
-
+	lock.Unlock()
+	semEmpty.Up()
         -- Perform synchronization...
 
       endWhile
