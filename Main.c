@@ -2,7 +2,7 @@ code Main
 
   -- OS Class: Project 2
   --
-  -- <PUT YOUR NAME HERE>
+  -- Michael Simpson
   --
   -- This package contains the following:
   --     SimpleThreadExample
@@ -25,8 +25,8 @@ code Main
       -- SimpleThreadExample ()
       -- MoreThreadExamples ()
       -- TestMutex ()
-       ProducerConsumer ()
-      -- DiningPhilosophers ()
+      --  ProducerConsumer ()
+       DiningPhilosophers ()
 
       ThreadFinish ()
 
@@ -310,15 +310,13 @@ code Main
     bufferNextIn: int = 0
     bufferNextOut: int = 0
     thArray: array [8] of Thread = new array of Thread { 8 of new Thread }
---    proLock: Mutex = new Mutex
-  --  conLock: Mutex = new Mutex
     lock: Mutex = new Mutex
     semFull: Semaphore = new Semaphore
     semEmpty: Semaphore = new Semaphore
   function ProducerConsumer ()
       semFull.Init(0)
       semEmpty.Init(BUFFER_SIZE)
-    --  proLock.Init()
+     -- proLock.Init()
      -- conLock.Init()
       lock.Init()
       print ("     ")
@@ -356,8 +354,9 @@ code Main
         c: char = intToChar ('A' + myId - 1)
       for i = 1 to 5
         -- Perform synchroniztion...
-	
+	-- Decrement the "empty" semaphore prior to production
         semEmpty.Down()
+	-- aquire the mutex lock
 	lock.Lock()
         -- Add c to the buffer
         buffer [bufferNextIn] = c
@@ -366,7 +365,9 @@ code Main
 
         -- Print a line showing the state
         PrintBuffer (c)
+	-- release the mutex lock
 	lock.Unlock()
+	-- Increment the "full" semaphore post production
         semFull.Up()
         -- Perform synchronization...
 
@@ -378,17 +379,20 @@ code Main
         c: char
       while true
         -- Perform synchroniztion...
-       
+        -- Decrement the "full" semaphore prior to consumption 
 	semFull.Down()
+	-- Aquire the mutex lock
 	lock.Lock()
         -- Remove next character from the buffer
         c = buffer [bufferNextOut]
         bufferNextOut = (bufferNextOut + 1) % BUFFER_SIZE
         bufferSize = bufferSize - 1
-	
+
         -- Print a line showing the state
         PrintBuffer (c)
+	-- Release the mutex lock
 	lock.Unlock()
+	-- Increment the "empty" semaphore post consumption
 	semEmpty.Up()
         -- Perform synchronization...
 
@@ -507,6 +511,7 @@ code Main
         mon. PickupForks (p)
         -- Now he is eating
         mon. PutDownForks (p)
+--mon. PrintAllStatus()
       endFor
     endFunction
 
@@ -514,28 +519,63 @@ code Main
     superclass Object
     fields
       status: array [5] of int             -- For each philosopher: HUNGRY, EATING, or THINKING
+      monLock: Mutex 
+      monCon: Condition
     methods
       Init ()
       PickupForks (p: int)
       PutDownForks (p: int)
-      PrintAllStatus ()
+      Test(p: int)
+      PrintAllStatus()
   endClass
 
   behavior ForkMonitor
 
     method Init ()
       -- Initialize so that all philosophers are THINKING.
-      -- ...unimplemented...
+      status = new array of int {5 of THINKING}
+      -- Allocate memory for the mutex lock
+        monLock = new Mutex
+      -- Initialize the Mutex lock
+	monLock.Init()
+      -- Allocate the memory for the condition
+        monCon = new Condition
+      -- Initialize the Condition
+	monCon.Init()
       endMethod
 
     method PickupForks (p: int)
       -- This method is called when philosopher 'p' is wants to eat.
-      -- ...unimplemented...
+      -- First lock the mutex before entering the critical section
+      monLock.Lock()
+      -- Set the current philosopher's status to hungry
+      status[p] = HUNGRY
+      -- Test the status of the adjacent forks
+      self.Test(p)
+      -- Signal a waiting philosopher to allow them to eat 
+      monCon.Signal(&monLock)
+      monLock.Unlock()
       endMethod
 
     method PutDownForks (p: int)
       -- This method is called when the philosopher 'p' is done eating.
-      -- ...unimplemented...
+      monLock.Lock()
+      status[p] = THINKING
+      self.Test((p-1) % 5)
+      self.Test((p+1) % 5)
+--self.PrintAllStatus()
+      monLock.Unlock()
+      endMethod
+
+    method Test (p: int)
+      -- This method is called to see if a hungry philosopher can eat
+      -- This can only be allowe if the current philosopher is hungry
+      -- and the philosopher on their right is not eating
+      -- and the philosopher on their left is not eating
+      if status[p] == HUNGRY && status[(p-1)%5] != EATING && status[(p+1)%5] != EATING
+        status[p] = EATING
+	monCon.Wait(&monLock)
+      endIf
       endMethod
 
     method PrintAllStatus ()
