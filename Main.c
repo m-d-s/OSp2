@@ -511,7 +511,6 @@ code Main
         mon. PickupForks (p)
         -- Now he is eating
         mon. PutDownForks (p)
---mon. PrintAllStatus()
       endFor
     endFunction
 
@@ -520,7 +519,7 @@ code Main
     fields
       status: array [5] of int             -- For each philosopher: HUNGRY, EATING, or THINKING
       monLock: Mutex 
-      monCon: Condition
+      monCons: array [5] of Condition
     methods
       Init ()
       PickupForks (p: int)
@@ -532,16 +531,20 @@ code Main
   behavior ForkMonitor
 
     method Init ()
+      var
+        i: int
       -- Initialize so that all philosophers are THINKING.
       status = new array of int {5 of THINKING}
       -- Allocate memory for the mutex lock
-        monLock = new Mutex
+      monLock = new Mutex
       -- Initialize the Mutex lock
-	monLock.Init()
-      -- Allocate the memory for the condition
-        monCon = new Condition
-      -- Initialize the Condition
-	monCon.Init()
+      monLock.Init()
+      -- Allocate the memory for the conditions
+      monCons = new array [5] of Condition {5 of new Condition}
+      -- Initialize the Conditions
+      for i = 0 to 4
+        monCons[i].Init()
+      endFor
       endMethod
 
     method PickupForks (p: int)
@@ -550,10 +553,13 @@ code Main
       monLock.Lock()
       -- Set the current philosopher's status to hungry
       status[p] = HUNGRY
+      --print the current philosopher status'
+      self.PrintAllStatus() 
       -- Test the status of the adjacent forks
-      self.Test(p)
-      -- Signal a waiting philosopher to allow them to eat 
-      monCon.Signal(&monLock)
+      self.Test(p) 
+      while status[p] == HUNGRY
+        monCons[p].Wait(&monLock)
+      endWhile
       monLock.Unlock()
       endMethod
 
@@ -561,20 +567,21 @@ code Main
       -- This method is called when the philosopher 'p' is done eating.
       monLock.Lock()
       status[p] = THINKING
+      self.PrintAllStatus()
       self.Test((p-1) % 5)
       self.Test((p+1) % 5)
---self.PrintAllStatus()
       monLock.Unlock()
       endMethod
 
-    method Test (p: int)
+    method Test (p: int) 
       -- This method is called to see if a hungry philosopher can eat
       -- This can only be allowe if the current philosopher is hungry
       -- and the philosopher on their right is not eating
       -- and the philosopher on their left is not eating
       if status[p] == HUNGRY && status[(p-1)%5] != EATING && status[(p+1)%5] != EATING
         status[p] = EATING
-	monCon.Wait(&monLock)
+        self.PrintAllStatus()
+        monCons[p].Signal(&monLock)
       endIf
       endMethod
 
